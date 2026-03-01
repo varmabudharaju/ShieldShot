@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 from pathlib import Path
 from PIL import Image
+from click.testing import CliRunner
+from shieldshot.cli import main
 from shieldshot.protect import protect_image
 
 
@@ -40,3 +42,18 @@ def test_protect_no_face_skips_perturbation(sample_photo, tmp_path):
     result = protect_image(sample_photo, output, mode="fast", skip_no_face=True)
     assert result["faces_found"] == 0
     assert result["watermark_embedded"] is True
+
+
+def test_cli_protect(sample_photo, tmp_path):
+    runner = CliRunner()
+    output = str(tmp_path / "cli_protected.jpg")
+    result = runner.invoke(main, ["protect", sample_photo, "-o", output])
+    assert result.exit_code == 0
+    assert Path(output).exists()
+
+
+def test_cli_version():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--version"])
+    assert result.exit_code == 0
+    assert "0.1.0" in result.output

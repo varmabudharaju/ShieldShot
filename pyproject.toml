@@ -36,3 +36,8 @@ dev = [
 
 [project.scripts]
 shieldshot = "shieldshot.cli:main"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that download large models (deselect with '-m \"not slow\"')",
+]

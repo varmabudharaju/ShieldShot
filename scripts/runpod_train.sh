@@ -202,17 +202,15 @@ for i, img_path in enumerate(image_paths):
     img = load_image(str(img_path))
     tensor = to_tensor(img).to(device)
 
-    # Resize to 112x112 for face models (PGD will resize internally for CLIP/VAE)
-    face_tensor = torch.nn.functional.interpolate(tensor, size=(112, 112), mode='bilinear', align_corners=False)
-
+    # PGD resizes internally per model via _resize_for_model
     perturbed = pgd_attack(
-        face_tensor,
+        tensor,
         num_steps=100,
         epsilon=8/255,
         target_models=ALL_MODELS,
     )
 
-    delta = (perturbed - face_tensor).cpu()
+    delta = (perturbed - tensor).cpu()
     torch.save(delta, out_path)
 
     if (i + 1) % 50 == 0 or (i + 1) == len(image_paths):

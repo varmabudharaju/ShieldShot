@@ -19,7 +19,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
 from shieldshot.perturb.generator import PerturbationGenerator
-from shieldshot.utils.image import load_image
+from shieldshot.utils.image import load_image, to_tensor
 
 
 class DeltaDataset(Dataset):
@@ -41,8 +41,14 @@ class DeltaDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         img_path, delta_path = self.pairs[idx]
-        image = load_image(str(img_path)).squeeze(0)  # [3, H, W]
+        image = to_tensor(load_image(str(img_path))).squeeze(0)  # [3, H, W]
         delta = torch.load(delta_path, weights_only=True).squeeze(0)  # [3, H, W]
+        # Resize image to match delta dimensions if they differ
+        if image.shape[-2:] != delta.shape[-2:]:
+            image = torch.nn.functional.interpolate(
+                image.unsqueeze(0), size=delta.shape[-2:],
+                mode="bilinear", align_corners=False,
+            ).squeeze(0)
         return image, delta
 
 

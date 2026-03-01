@@ -194,7 +194,8 @@ def main() -> None:
 
             # L_distortion: maximize feature divergence
             perturbed_emb = _get_embeddings(perturbed, ALL_MODELS)
-            loss_distortion = multi_model_loss(clean_emb, perturbed_emb)
+            # multi_model_loss returns negated (for PGD), negate again for optimizer
+            loss_distortion = -multi_model_loss(clean_emb, perturbed_emb)
 
             # L_quality: LPIPS between original and perturbed
             loss_quality = lpips_model(
@@ -205,7 +206,7 @@ def main() -> None:
             jpeg_quality = random.randint(60, 95)
             compressed = differentiable_jpeg_approx(perturbed, quality=jpeg_quality)
             compressed_emb = _get_embeddings(compressed, ALL_MODELS)
-            loss_compression = multi_model_loss(clean_emb, compressed_emb)
+            loss_compression = -multi_model_loss(clean_emb, compressed_emb)
 
             loss = (
                 args.w_distortion * loss_distortion
@@ -215,6 +216,7 @@ def main() -> None:
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
             optimizer.step()
 
             t_total += loss.item()
@@ -238,7 +240,7 @@ def main() -> None:
                 perturbed = generator(images)
                 perturbed_emb = _get_embeddings(perturbed, ALL_MODELS, no_grad=True)
 
-                v_dist += multi_model_loss(clean_emb, perturbed_emb).item()
+                v_dist += (-multi_model_loss(clean_emb, perturbed_emb)).item()
                 v_qual += lpips_model(
                     perturbed * 2 - 1, images * 2 - 1,
                 ).mean().item()

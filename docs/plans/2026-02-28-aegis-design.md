@@ -1,4 +1,4 @@
-# Aegis — Deepfake Protection Tool Design
+# ShieldShot — Deepfake Protection Tool
 
 ## Problem
 
@@ -6,7 +6,7 @@ Photos posted on public platforms can be downloaded and used to create deepfakes
 
 ## Solution
 
-Aegis is a Python library + CLI that applies three layers of invisible protection to photos before they're shared publicly:
+ShieldShot is a Python library + CLI that applies three layers of invisible protection to photos before they're shared publicly:
 
 1. **Adversarial perturbation** — invisible noise that disrupts deepfake models
 2. **Invisible watermark** — proves ownership, survives compression and screenshots
@@ -40,22 +40,22 @@ Protected Photo (visually identical)
 
 ```bash
 # First-time setup — generate signing key, download models
-aegis init
+shieldshot init
 
 # Protect a photo (fast mode — generator network, default)
-aegis protect photo.jpg -o protected.jpg
+shieldshot protect photo.jpg -o protected.jpg
 
 # Protect with max strength (PGD optimization)
-aegis protect photo.jpg -o protected.jpg --mode thorough
+shieldshot protect photo.jpg -o protected.jpg --mode thorough
 
 # Batch protect a directory
-aegis protect ./photos/ -o ./protected/
+shieldshot protect ./photos/ -o ./protected/
 
 # Verify provenance
-aegis verify protected.jpg
+shieldshot verify protected.jpg
 
 # Extract watermark (prove ownership)
-aegis extract protected.jpg
+shieldshot extract protected.jpg
 ```
 
 ## Layer 1: Adversarial Perturbation
@@ -189,7 +189,7 @@ Photo file
   └── C2PA Manifest
         ├── Creator identity (public key)
         ├── Timestamp (signed)
-        ├── Software ("aegis v1.0")
+        ├── Software ("shieldshot v1.0")
         ├── Thumbnail of original
         ├── Hash of original pixels
         └── Signature
@@ -197,7 +197,7 @@ Photo file
 
 ### Key Setup
 
-`aegis init` generates a self-signed certificate stored at `~/.aegis/keys/`. Users can import existing certificates.
+`shieldshot init` generates a self-signed certificate stored at `~/.shieldshot/keys/`. Users can import existing certificates.
 
 ### Limitations
 
@@ -217,9 +217,9 @@ Photo file
 ## Project Structure
 
 ```
-aegis/
+shieldshot/
 ├── src/
-│   └── aegis/
+│   └── shieldshot/
 │       ├── __init__.py
 │       ├── cli.py                  # Click CLI
 │       ├── protect.py              # Orchestrates all three layers
@@ -302,7 +302,7 @@ aegis/
 3. Watermark survives JPEG Q70 with >95% bit accuracy
 4. Watermark survives simulated screenshot with >90% bit accuracy
 5. Fast mode runs in <1s on consumer GPU
-6. `pip install aegis` and it works
+6. `pip install shieldshot` and it works
 
 ## Out of Scope (Future)
 

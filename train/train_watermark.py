@@ -186,6 +186,10 @@ def train(args):
                 + args.w_compat * loss_compat
             )
 
+            if torch.isnan(loss) or torch.isinf(loss):
+                optimizer.zero_grad()
+                continue
+
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)

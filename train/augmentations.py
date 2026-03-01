@@ -20,7 +20,7 @@ def jpeg_compress(tensor, quality=70):
 
 def screenshot_simulate(tensor):
     gamma = random.uniform(0.8, 1.2)
-    result = tensor.pow(gamma)
+    result = tensor.clamp(min=1e-6).pow(gamma)
     k = 3
     padding = k // 2
     channels = result.shape[1]

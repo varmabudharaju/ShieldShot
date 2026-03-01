@@ -179,11 +179,18 @@ def train(args):
             residual = watermarked - images
             loss_compat = high_freq_penalty(residual)
 
+            # Warmup: BCE-only for first 20 epochs so encoder learns to embed
+            warmup_epochs = 20
+            if epoch <= warmup_epochs:
+                quality_scale = 0.0
+            else:
+                quality_scale = min(1.0, (epoch - warmup_epochs) / 10.0)
+
             loss = (
                 args.w_bce * loss_bce
-                + args.w_ssim * loss_ssim
-                + args.w_lpips * loss_lpips
-                + args.w_compat * loss_compat
+                + quality_scale * args.w_ssim * loss_ssim
+                + quality_scale * args.w_lpips * loss_lpips
+                + quality_scale * args.w_compat * loss_compat
             )
 
             if torch.isnan(loss) or torch.isinf(loss):

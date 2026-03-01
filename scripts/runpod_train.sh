@@ -64,9 +64,7 @@ if [ -d "$PROJECT_DIR" ]; then
 else
     echo "Cloning ShieldShot..."
     cd "$WORKSPACE"
-    # Upload via scp if not on GitHub:
-    # scp -r /Users/varma/shieldshot/ runpod:/workspace/shieldshot/
-    git clone https://github.com/<YOUR_USERNAME>/shieldshot.git
+    git clone https://github.com/varmabudharaju/ShieldShot.git shieldshot
 fi
 
 cd "$PROJECT_DIR"

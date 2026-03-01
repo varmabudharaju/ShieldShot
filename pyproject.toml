@@ -21,6 +21,7 @@ dependencies = [
     "insightface>=0.7",
     "onnxruntime>=1.16",
     "reedsolo>=1.7",
+    "c2pa-python>=0.4",
 ]
 
 [project.optional-dependencies]

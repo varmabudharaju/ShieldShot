@@ -1,12 +1,17 @@
 """Target model loaders for adversarial perturbation.
 
-Loads pretrained face recognition models for use as targets in
-adversarial perturbation generation. Each model takes a face crop
-tensor and returns a 512-dimensional embedding.
+Loads pretrained models for use as targets in adversarial perturbation.
 
-Models:
-    - ArcFace: InceptionResnetV1 trained on CASIA-Webface, accepts [B, 3, 112, 112]
-    - FaceNet: InceptionResnetV1 trained on VGGFace2, accepts [B, 3, 160, 160]
+Face encoders (disrupts face-swap and identity-based generation):
+    - ArcFace: InceptionResnetV1, [B, 3, 112, 112] → [B, 512]
+    - FaceNet: InceptionResnetV1, [B, 3, 160, 160] → [B, 512]
+
+Vision encoders (disrupts image generation models):
+    - CLIP ViT-L/14: Used by SD 1.5, [B, 3, 224, 224] → [B, 768]
+    - OpenCLIP ViT-H/14: Used by SDXL, IP-Adapter, PhotoMaker, Flux, PuLID, [B, 3, 224, 224] → [B, 1280]
+
+Latent encoders (disrupts Dreambooth/LoRA fine-tuning):
+    - SD VAE: Stable Diffusion VAE encoder, [B, 3, 512, 512] → [B, 4, 64, 64] (flattened for loss)
 """
 
 from __future__ import annotations
@@ -77,44 +82,125 @@ def load_facenet() -> nn.Module:
     return _model_cache["facenet"]
 
 
+def load_clip() -> nn.Module:
+    """Load CLIP ViT-L/14 image encoder.
+
+    Used by Stable Diffusion 1.5 for image understanding.
+    Returns an nn.Module: [B, 3, 224, 224] → [B, 768].
+    """
+    if "clip" not in _model_cache:
+        from transformers import CLIPVisionModelWithProjection
+
+        model = CLIPVisionModelWithProjection.from_pretrained(
+            "openai/clip-vit-large-patch14"
+        ).eval()
+        _model_cache["clip"] = model
+    return _model_cache["clip"]
+
+
+def load_openclip() -> nn.Module:
+    """Load OpenCLIP ViT-H/14 image encoder.
+
+    Used by SDXL, IP-Adapter, PhotoMaker, Flux, PuLID.
+    Returns an nn.Module: [B, 3, 224, 224] → [B, 1280].
+    """
+    if "openclip" not in _model_cache:
+        import open_clip
+
+        model, _, _ = open_clip.create_model_and_transforms(
+            "ViT-H-14", pretrained="laion2b_s32b_b79k"
+        )
+        model = model.visual.eval()
+        _model_cache["openclip"] = model
+    return _model_cache["openclip"]
+
+
+def load_sd_vae() -> nn.Module:
+    """Load Stable Diffusion VAE encoder.
+
+    Disrupts Dreambooth/LoRA fine-tuning by corrupting latent representations.
+    Returns an nn.Module: [B, 3, H, W] → [B, 4, H/8, W/8].
+    """
+    if "sd_vae" not in _model_cache:
+        from diffusers import AutoencoderKL
+
+        vae = AutoencoderKL.from_pretrained(
+            "stabilityai/sd-vae-ft-mse"
+        ).eval()
+        _model_cache["sd_vae"] = vae
+    return _model_cache["sd_vae"]
+
+
+# Input size requirements per model
+MODEL_INPUT_SIZES = {
+    "arcface": (112, 112),
+    "facenet": (160, 160),
+    "clip": (224, 224),
+    "openclip": (224, 224),
+    "sd_vae": (512, 512),
+}
+
+# All available model loaders
+MODEL_LOADERS = {
+    "arcface": load_arcface,
+    "facenet": load_facenet,
+    "clip": load_clip,
+    "openclip": load_openclip,
+    "sd_vae": load_sd_vae,
+}
+
+# Default models for face-region perturbation
+FACE_MODELS = ["arcface", "facenet"]
+
+# All models for maximum protection
+ALL_MODELS = ["arcface", "facenet", "clip", "openclip", "sd_vae"]
+
+
+def _resize_for_model(tensor: torch.Tensor, model_name: str) -> torch.Tensor:
+    """Resize tensor to the required input size for a given model."""
+    target_size = MODEL_INPUT_SIZES.get(model_name)
+    if target_size and tensor.shape[-2:] != target_size:
+        return F.interpolate(tensor, size=target_size, mode="bilinear", align_corners=False)
+    return tensor
+
+
+def _run_model(model_name: str, model: nn.Module, tensor: torch.Tensor) -> torch.Tensor:
+    """Run a model and return a flat embedding vector."""
+    inp = _resize_for_model(tensor, model_name)
+
+    if model_name == "clip":
+        out = model(pixel_values=inp)
+        return out.image_embeds  # [B, 768]
+    elif model_name == "sd_vae":
+        latent = model.encode(inp).latent_dist.mean  # [B, 4, H/8, W/8]
+        return latent.flatten(1)  # Flatten for cosine distance loss
+    else:
+        return model(inp)
+
+
 def get_face_embedding(
     face_tensor: torch.Tensor,
     models: list[str] | None = None,
 ) -> dict[str, torch.Tensor]:
-    """Get embeddings from multiple face recognition models.
+    """Get embeddings from multiple models.
 
     Args:
-        face_tensor: Input face tensor. Shape depends on the models used.
-            For ArcFace: [B, 3, 112, 112]. For FaceNet: [B, 3, 160, 160].
-            When using both, pass [B, 3, 112, 112] -- ArcFace will use it
-            directly and FaceNet will receive a resized version.
-        models: List of model names to use. Defaults to ["arcface", "facenet"].
+        face_tensor: Input tensor [B, 3, H, W] in [0, 1].
+        models: List of model names. Defaults to FACE_MODELS (arcface + facenet).
 
     Returns:
-        Dictionary mapping model name to embedding tensor of shape [B, 512].
+        Dictionary mapping model name to embedding tensor.
     """
     if models is None:
-        models = ["arcface", "facenet"]
-
-    loaders = {
-        "arcface": load_arcface,
-        "facenet": load_facenet,
-    }
+        models = FACE_MODELS
 
     embeddings = {}
     for name in models:
-        loader = loaders[name]
+        loader = MODEL_LOADERS[name]
         model = loader()
         model.eval()
         with torch.no_grad():
-            if name == "facenet" and face_tensor.shape[-2:] != (160, 160):
-                # Resize for FaceNet if input is not 160x160
-                inp = F.interpolate(
-                    face_tensor, size=(160, 160), mode="bilinear", align_corners=False
-                )
-            else:
-                inp = face_tensor
-            emb = model(inp)
+            emb = _run_model(name, model, face_tensor)
         embeddings[name] = emb
 
     return embeddings

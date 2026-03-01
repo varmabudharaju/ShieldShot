@@ -7,6 +7,7 @@ import torch
 
 from shieldshot.detect.face_detector import FaceDetector
 from shieldshot.perturb.pgd import pgd_attack
+from shieldshot.perturb.models import FACE_MODELS, ALL_MODELS
 from shieldshot.utils.image import load_image, save_image, to_tensor, to_pil
 from shieldshot.utils.quality import check_quality
 from shieldshot.watermark.encoder import WatermarkEncoder
@@ -22,6 +23,7 @@ def protect_image(
     skip_no_face: bool = False,
     sign_c2pa: bool = False,
     keys_dir: str | None = None,
+    target_models: list[str] | None = None,
 ) -> dict:
     start = time.time()
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -50,8 +52,13 @@ def protect_image(
             x2, y2 = min(W, x2), min(H, y2)
             face_crop = tensor[:, :, y1:y2, x1:x2]
 
+            # Select target models based on mode
+            models = target_models
+            if models is None:
+                models = ALL_MODELS if mode == "thorough" else FACE_MODELS
+
             if mode == "thorough":
-                perturbed_crop = pgd_attack(face_crop, num_steps=100)
+                perturbed_crop = pgd_attack(face_crop, num_steps=100, target_models=models)
             else:
                 try:
                     from shieldshot.perturb.generator import PerturbationGenerator
@@ -68,7 +75,7 @@ def protect_image(
                     with torch.no_grad():
                         perturbed_crop = gen(face_crop)
                 except Exception:
-                    perturbed_crop = pgd_attack(face_crop, num_steps=20)
+                    perturbed_crop = pgd_attack(face_crop, num_steps=20, target_models=models)
 
             tensor[:, :, y1:y2, x1:x2] = perturbed_crop
         result["perturbation_applied"] = True

@@ -22,6 +22,10 @@ dependencies = [
     "onnxruntime>=1.16",
     "reedsolo>=1.7",
     "c2pa-python>=0.4",
+    "transformers>=4.30",
+    "open_clip_torch>=2.20",
+    "diffusers>=0.25",
+    "safetensors>=0.4",
 ]
 
 [project.optional-dependencies]

@@ -6,20 +6,14 @@ import torch
 import torch.nn.functional as F
 
 from shieldshot.perturb.losses import multi_model_loss
-from shieldshot.perturb.models import load_arcface, load_facenet
-
-
-_MODEL_LOADERS = {
-    "arcface": load_arcface,
-    "facenet": load_facenet,
-}
+from shieldshot.perturb.models import MODEL_LOADERS, FACE_MODELS, _resize_for_model, _run_model
 
 
 def _get_embeddings_with_grad(
     face_tensor: torch.Tensor,
     models: list[str],
 ) -> dict[str, torch.Tensor]:
-    """Get face embeddings without disabling gradients.
+    """Get embeddings without disabling gradients.
 
     Unlike ``get_face_embedding``, this does **not** wrap calls in
     ``torch.no_grad()``, so gradients flow back through the models --
@@ -27,15 +21,9 @@ def _get_embeddings_with_grad(
     """
     embeddings: dict[str, torch.Tensor] = {}
     for name in models:
-        model = _MODEL_LOADERS[name]()
+        model = MODEL_LOADERS[name]()
         model.eval()
-        if name == "facenet" and face_tensor.shape[-2:] != (160, 160):
-            inp = F.interpolate(
-                face_tensor, size=(160, 160), mode="bilinear", align_corners=False
-            )
-        else:
-            inp = face_tensor
-        embeddings[name] = model(inp)
+        embeddings[name] = _run_model(name, model, face_tensor)
     return embeddings
 
 
@@ -63,7 +51,7 @@ def pgd_attack(
     if step_size is None:
         step_size = epsilon / max(num_steps / 4, 1)
     if target_models is None:
-        target_models = ["arcface", "facenet"]
+        target_models = FACE_MODELS
 
     # Get clean embeddings (no grad needed for the reference)
     with torch.no_grad():

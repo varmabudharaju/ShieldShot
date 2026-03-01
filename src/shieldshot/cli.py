@@ -27,7 +27,9 @@ def init():
 @click.option("--mode", type=click.Choice(["fast", "thorough"]), default="fast")
 @click.option("--sign", is_flag=True, help="Apply C2PA provenance signing.")
 @click.option("--user-id", default="default")
-def protect(input_path, output_path, mode, sign, user_id):
+@click.option("--targets", default=None,
+              help="Comma-separated target models (arcface,facenet,clip,openclip,sd_vae). Default: auto.")
+def protect(input_path, output_path, mode, sign, user_id, targets):
     """Protect a photo from deepfake misuse."""
     from shieldshot.protect import protect_image
 
@@ -35,11 +37,13 @@ def protect(input_path, output_path, mode, sign, user_id):
         p = Path(input_path)
         output_path = str(p.parent / f"{p.stem}_protected{p.suffix}")
 
+    target_models = targets.split(",") if targets else None
+
     click.echo(f"Protecting {input_path} (mode={mode})...")
 
     result = protect_image(
         input_path, output_path, mode=mode, user_id=user_id,
-        skip_no_face=True, sign_c2pa=sign,
+        skip_no_face=True, sign_c2pa=sign, target_models=target_models,
     )
 
     if result["success"]:

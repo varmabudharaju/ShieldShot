@@ -51,3 +51,23 @@ def test_check_quality_fails_different(different_pair):
     t1, t2 = different_pair
     passed, metrics = check_quality(t1, t2, ssim_threshold=0.95)
     assert passed is False
+
+
+def test_compute_lpips_identical(identical_pair):
+    t1, t2 = identical_pair
+    from shieldshot.utils.quality import compute_lpips
+    lpips_val = compute_lpips(t1, t2)
+    assert lpips_val < 0.01
+
+
+def test_compute_lpips_different(different_pair):
+    t1, t2 = different_pair
+    from shieldshot.utils.quality import compute_lpips
+    lpips_val = compute_lpips(t1, t2)
+    assert lpips_val > 0.1
+
+
+def test_check_quality_returns_lpips(identical_pair):
+    t1, t2 = identical_pair
+    passed, metrics = check_quality(t1, t2)
+    assert "lpips" in metrics

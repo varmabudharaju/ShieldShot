@@ -104,10 +104,14 @@ def protect_image(
     original_tensor = to_tensor(pil_image).to(device)
     passed, metrics = check_quality(original_tensor, watermarked)
     result["ssim"] = metrics["ssim"]
+    result["lpips"] = metrics.get("lpips")
 
     if not passed:
         result["success"] = False
-        result["reason"] = f"Quality gate failed: SSIM={metrics['ssim']:.4f}"
+        result["reason"] = (
+            f"Quality gate failed: SSIM={metrics['ssim']:.4f}, "
+            f"LPIPS={metrics.get('lpips', 'N/A')}"
+        )
         return result
 
     output_pil = to_pil(watermarked)

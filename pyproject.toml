@@ -20,6 +20,7 @@ dependencies = [
     "facenet-pytorch>=2.5",
     "insightface>=0.7",
     "onnxruntime>=1.16",
+    "reedsolo>=1.7",
 ]
 
 [project.optional-dependencies]

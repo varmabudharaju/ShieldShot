@@ -125,10 +125,10 @@ python3 -m train.train_watermark \
     --batch-size 32 \
     --image-size 256 \
     --lr 1e-3 \
-    --w-bce 1.0 \
-    --w-ssim 0.3 \
-    --w-lpips 0.7 \
-    --w-compat 0.1 \
+    --w-bce 5.0 \
+    --w-ssim 0.1 \
+    --w-lpips 0.3 \
+    --w-compat 0.05 \
     --num-workers 4 \
     --save-every 10 \
     --resume \

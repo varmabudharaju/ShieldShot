@@ -13,7 +13,7 @@ echo "Starting generator training..."
 python3 -m train.train_generator \
     --data-dir /workspace/data/ffhq_gen_subset \
     --epochs 30 \
-    --batch-size 8 \
+    --batch-size 2 \
     --image-size 256 \
     --lr 1e-4 \
     --w-distortion 1.0 \

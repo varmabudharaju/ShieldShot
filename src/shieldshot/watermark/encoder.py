@@ -21,7 +21,7 @@ class WatermarkEncoder(nn.Module):
         self.dec2 = self._conv_block(hidden_dim * 4, hidden_dim)
         self.dec1 = self._conv_block(hidden_dim * 2, hidden_dim)
         self.out = nn.Sequential(nn.Conv2d(hidden_dim, 3, 1), nn.Tanh())
-        self.strength = 0.1
+        self.strength = 0.2
 
     def _conv_block(self, in_ch, out_ch):
         return nn.Sequential(

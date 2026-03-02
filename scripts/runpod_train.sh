@@ -14,14 +14,14 @@
 #      chmod +x train.sh
 #      ./train.sh
 #
-#   3. Come back in ~4-5 hours. Trained models will be in /workspace/shieldshot/trained_models/
+#   3. Come back in ~1-2 hours. Trained models will be in /workspace/shieldshot/trained_models/
 #
 # Estimated time (RTX 4090):
-#   Step 1 (setup):           ~10 min
-#   Step 2 (watermark):       ~2 hrs
-#   Step 3 (generator):       ~2-3 hrs
+#   Step 1 (setup):           ~5 min
+#   Step 2 (watermark):       ~30-45 min (15k images, 60 epochs)
+#   Step 3 (generator):       ~30-45 min (5k images, 30 epochs)
 #   Step 4 (validation):      ~5 min
-#   Total:                    ~4-5 hrs, ~$4-5
+#   Total:                    ~1-1.5 hrs
 #
 # =============================================================================
 
@@ -34,7 +34,8 @@ FFHQ_DIR="$DATA_DIR/ffhq"
 MODELS_DIR="$PROJECT_DIR/trained_models"
 LOG_DIR="$PROJECT_DIR/training_logs"
 
-# Number of images for generator training (loads all 5 target models per batch)
+# Training data sizes
+WATERMARK_SUBSET_SIZE=15000
 GENERATOR_SUBSET_SIZE=5000
 
 echo "============================================="
@@ -118,10 +119,21 @@ echo " Step 2/4: Training Watermark Model"
 echo " Started: $(date)"
 echo "============================================="
 
+# Create a subset for watermark training
+WM_SUBSET_DIR="$DATA_DIR/ffhq_wm_subset"
+if [ ! -d "$WM_SUBSET_DIR" ] || [ "$(ls -1 "$WM_SUBSET_DIR" 2>/dev/null | wc -l)" -lt "$WATERMARK_SUBSET_SIZE" ]; then
+    echo "Creating subset of $WATERMARK_SUBSET_SIZE images for watermark training..."
+    mkdir -p "$WM_SUBSET_DIR"
+    ls "$FFHQ_DIR"/*.png | shuf -n "$WATERMARK_SUBSET_SIZE" | while read f; do
+        ln -sf "$f" "$WM_SUBSET_DIR/$(basename "$f")"
+    done
+    echo "Subset ready: $(ls -1 "$WM_SUBSET_DIR" | wc -l) images"
+fi
+
 python3 -m train.train_watermark \
-    --data-dir "$FFHQ_DIR" \
+    --data-dir "$WM_SUBSET_DIR" \
     --output-dir "$MODELS_DIR" \
-    --epochs 100 \
+    --epochs 60 \
     --batch-size 32 \
     --image-size 256 \
     --lr 1e-3 \
@@ -161,7 +173,7 @@ fi
 
 python3 -m train.train_generator \
     --data-dir "$GEN_SUBSET_DIR" \
-    --epochs 50 \
+    --epochs 30 \
     --batch-size 8 \
     --image-size 256 \
     --lr 1e-4 \

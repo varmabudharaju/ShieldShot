@@ -4,15 +4,17 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 def load_image(path: str) -> Image.Image:
-    """Load an image and convert to RGB."""
+    """Load an image and convert to RGB, applying EXIF rotation."""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Image not found: {path}")
-    return Image.open(p).convert("RGB")
+    img = Image.open(p)
+    img = ImageOps.exif_transpose(img)
+    return img.convert("RGB")
 
 
 def save_image(img: Image.Image, path: str, quality: int = 95) -> None:

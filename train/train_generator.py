@@ -120,10 +120,18 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("generator.pt"), help="Output weights path")
     parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
     parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N epochs")
+    parser.add_argument("--models", type=str, default=None,
+                        help="Comma-separated list of target models (default: all)")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+
+    # Select target models
+    if args.models:
+        target_models = [m.strip() for m in args.models.split(",")]
+    else:
+        target_models = ALL_MODELS
 
     # Dataset with validation split
     full_dataset = FaceImageDataset(args.data_dir, image_size=args.image_size)
@@ -143,15 +151,15 @@ def main() -> None:
         num_workers=args.num_workers, drop_last=False,
     )
     print(f"Dataset: {train_size} train, {val_size} val images")
-    print(f"Target models: {ALL_MODELS}")
+    print(f"Target models: {target_models}")
 
     # Models
     generator = PerturbationGenerator().to(device)
     lpips_model = _lpips.LPIPS(net="squeeze", verbose=False).to(device)
 
-    # Pre-load all target models (cached)
+    # Pre-load target models (cached)
     print("Loading target models...")
-    for name in ALL_MODELS:
+    for name in target_models:
         model = MODEL_LOADERS[name]()
         model.to(device).eval()
         for p in model.parameters():
@@ -187,13 +195,13 @@ def main() -> None:
             images = images.to(device)
 
             # Clean embeddings (no grad — these are the reference)
-            clean_emb = _get_embeddings(images, ALL_MODELS, no_grad=True)
+            clean_emb = _get_embeddings(images, target_models, no_grad=True)
 
             # Generator forward
             perturbed = generator(images)
 
             # L_distortion: maximize feature divergence
-            perturbed_emb = _get_embeddings(perturbed, ALL_MODELS)
+            perturbed_emb = _get_embeddings(perturbed, target_models)
             # multi_model_loss returns negated (for PGD), negate again for optimizer
             loss_distortion = -multi_model_loss(clean_emb, perturbed_emb)
 
@@ -205,7 +213,7 @@ def main() -> None:
             # L_compression: distortion after JPEG compression
             jpeg_quality = random.randint(60, 95)
             compressed = differentiable_jpeg_approx(perturbed, quality=jpeg_quality)
-            compressed_emb = _get_embeddings(compressed, ALL_MODELS)
+            compressed_emb = _get_embeddings(compressed, target_models)
             loss_compression = -multi_model_loss(clean_emb, compressed_emb)
 
             loss = (
@@ -236,9 +244,9 @@ def main() -> None:
         with torch.no_grad():
             for images in val_loader:
                 images = images.to(device)
-                clean_emb = _get_embeddings(images, ALL_MODELS, no_grad=True)
+                clean_emb = _get_embeddings(images, target_models, no_grad=True)
                 perturbed = generator(images)
-                perturbed_emb = _get_embeddings(perturbed, ALL_MODELS, no_grad=True)
+                perturbed_emb = _get_embeddings(perturbed, target_models, no_grad=True)
 
                 v_dist += (-multi_model_loss(clean_emb, perturbed_emb)).item()
                 v_qual += lpips_model(

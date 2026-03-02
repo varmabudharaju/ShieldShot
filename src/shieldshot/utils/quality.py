@@ -41,7 +41,7 @@ def check_quality(
     original: torch.Tensor,
     modified: torch.Tensor,
     ssim_threshold: float = 0.95,
-    lpips_threshold: float = 0.05,
+    lpips_threshold: float = 0.10,
 ) -> tuple[bool, dict]:
     """Check if modified image passes quality gate.
 

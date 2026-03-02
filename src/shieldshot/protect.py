@@ -69,11 +69,20 @@ def protect_image(
                     )
                     if weights_path.exists():
                         gen.load_state_dict(
-                            torch.load(weights_path, weights_only=True)
+                            torch.load(weights_path, weights_only=True, map_location=device)
                         )
                     gen.eval()
                     with torch.no_grad():
-                        perturbed_crop = gen(face_crop)
+                        _, _, crop_h, crop_w = face_crop.shape
+                        resized = torch.nn.functional.interpolate(
+                            face_crop, size=(256, 256), mode="bilinear", align_corners=False
+                        )
+                        perturbed_small = gen(resized)
+                        delta_small = (perturbed_small - resized) * 2.0
+                        delta_large = torch.nn.functional.interpolate(
+                            delta_small, size=(crop_h, crop_w), mode="bilinear", align_corners=False
+                        )
+                        perturbed_crop = torch.clamp(face_crop + delta_large, 0, 1)
                 except Exception:
                     perturbed_crop = pgd_attack(face_crop, num_steps=20, target_models=models)
 
@@ -86,9 +95,9 @@ def protect_image(
 
     # Watermark
     encoder = WatermarkEncoder(payload_bits=PAYLOAD_BITS).to(device)
-    wm_weights = Path.home() / ".shieldshot" / "models" / "watermark_encoder.pt"
+    wm_weights = Path.home() / ".shieldshot" / "models" / "encoder.pt"
     if wm_weights.exists():
-        encoder.load_state_dict(torch.load(wm_weights, weights_only=True))
+        encoder.load_state_dict(torch.load(wm_weights, weights_only=True, map_location=device))
     encoder.eval()
 
     payload_bits = encode_payload(user_id=user_id, timestamp=int(time.time()))

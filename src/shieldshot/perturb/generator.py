@@ -26,6 +26,13 @@ class PerturbationGenerator(nn.Module):
         )
 
     def forward(self, image):
+        _, _, H, W = image.shape
+        # Pad to multiple of 8 so encoder/decoder sizes match
+        pad_h = (8 - H % 8) % 8
+        pad_w = (8 - W % 8) % 8
+        if pad_h > 0 or pad_w > 0:
+            image = torch.nn.functional.pad(image, (0, pad_w, 0, pad_h), mode="reflect")
+
         e1 = self.enc1(image)
         e2 = self.enc2(self.pool(e1))
         e3 = self.enc3(self.pool(e2))
@@ -34,5 +41,11 @@ class PerturbationGenerator(nn.Module):
         d2 = self.dec2(torch.cat([self.up(d3), e2], dim=1))
         d1 = self.dec1(torch.cat([self.up(d2), e1], dim=1))
         delta = self.out(d1) * self.epsilon
+
+        # Remove padding from delta
+        if pad_h > 0 or pad_w > 0:
+            delta = delta[:, :, :H, :W]
+            image = image[:, :, :H, :W]
+
         perturbed = torch.clamp(image + delta, 0, 1)
         return perturbed

@@ -8,7 +8,7 @@ import sys
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from shieldshot.utils.image import to_tensor
+from shieldshot.utils.image import load_image, to_tensor
 from shieldshot.perturb.models import load_arcface, load_facenet, _resize_for_model
 
 
@@ -22,11 +22,12 @@ def main():
 
     device = "cpu"
 
-    # Load images
-    orig_full = Image.open(orig_path).convert("RGB")
-    prot_full = Image.open(prot_path).convert("RGB")
-    # Resize to same size for quality comparison
-    prot_full = prot_full.resize(orig_full.size, Image.LANCZOS)
+    # Load images (handles EXIF rotation)
+    orig_full = load_image(orig_path)
+    prot_full = load_image(prot_path)
+    # Ensure same size for quality comparison
+    if prot_full.size != orig_full.size:
+        prot_full = prot_full.resize(orig_full.size, Image.LANCZOS)
     orig_t_full = to_tensor(orig_full).to(device)
     prot_t_full = to_tensor(prot_full).to(device)
     # Small version for face models
@@ -43,14 +44,35 @@ def main():
     print(f"  Protected: {prot_path}")
     print("=" * 50)
 
+    # Detect and crop faces for model testing
+    from shieldshot.detect.face_detector import FaceDetector
+    detector = FaceDetector()
+
+    orig_faces = detector.detect(orig_full)
+    prot_faces = detector.detect(prot_full)
+
+    if not orig_faces or not prot_faces:
+        print("  Could not detect faces. Using full image.")
+        orig_face_t = orig_t
+        prot_face_t = prot_t
+    else:
+        # Crop face regions
+        ob = orig_faces[0]["bbox"]
+        orig_face = orig_full.crop((ob[0], ob[1], ob[2], ob[3])).resize((256, 256), Image.LANCZOS)
+        pb = prot_faces[0]["bbox"]
+        prot_face = prot_full.crop((pb[0], pb[1], pb[2], pb[3])).resize((256, 256), Image.LANCZOS)
+        orig_face_t = to_tensor(orig_face).to(device)
+        prot_face_t = to_tensor(prot_face).to(device)
+        print(f"  Face detected in both images")
+
     # ArcFace
     print()
     print("  ArcFace (used by face-swap tools)")
     print("  " + "-" * 40)
     arcface = load_arcface().to(device).eval()
     with torch.no_grad():
-        orig_emb = arcface(_resize_for_model(orig_t, "arcface"))
-        prot_emb = arcface(_resize_for_model(prot_t, "arcface"))
+        orig_emb = arcface(_resize_for_model(orig_face_t, "arcface"))
+        prot_emb = arcface(_resize_for_model(prot_face_t, "arcface"))
     cos_sim = F.cosine_similarity(orig_emb, prot_emb).item()
     match = cos_sim > 0.5
     print(f"  Cosine similarity: {cos_sim:.4f}")
@@ -62,8 +84,8 @@ def main():
     print("  " + "-" * 40)
     facenet = load_facenet().to(device).eval()
     with torch.no_grad():
-        orig_emb = facenet(_resize_for_model(orig_t, "facenet"))
-        prot_emb = facenet(_resize_for_model(prot_t, "facenet"))
+        orig_emb = facenet(_resize_for_model(orig_face_t, "facenet"))
+        prot_emb = facenet(_resize_for_model(prot_face_t, "facenet"))
     cos_sim = F.cosine_similarity(orig_emb, prot_emb).item()
     match = cos_sim > 0.5
     print(f"  Cosine similarity: {cos_sim:.4f}")
